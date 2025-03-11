@@ -2,7 +2,8 @@
 - 계정코드별 예외처리 : ACCO_EXCPTN
 - SUB TABLE WITH 문 처리 : 재보험자산 주석처리
 - 240527 : 금리리스크보고서COA : 금리위험경감인정 파생상품 ('720', '722', '630')  (이자율스왑(IRS) , 채권선도, 국채선물) 
-- 240527 : 금리위험경감미인정파생상품을 기타 파생상품으로 재분류  
+- 240527 : 금리위험경감미인정파생상품을 기타 파생상품으로 재분류 
+- 250311 : 장내외파생상품 FV < 0 -> 부채
 */
 WITH /* SQL-ID : KRDA101BM */ 
 ACCO_EXCPTN AS (
@@ -249,8 +250,8 @@ ACCO_EXCPTN AS (
 ---------------------------------------------------------------------------------------------------
 -- 금리리스크 COA 수정 
 /* 자산(1) 부채(2) */
-        ,CASE WHEN A.LT_TP = 'Y' AND PROD_GRP_TPCD IN ('6','7') AND A.FAIR_BS_AMT < 0 THEN '2' --장내장외파생상품 FV<0 -> 부채 
-              WHEN PROD_GRP_TPCD IN ('6','7') THEN  SUBSTR(A.ACCO_CD, 1, 1) -- 그외 계정과목 코드 따름 
+        ,CASE WHEN A.LT_TP = 'Y' AND PROD_GRP_TPCD IN ('6','7') AND A.FAIR_BS_AMT < 0 THEN '2' -- 간접보유자산 : 장내장외파생상품 FV<0 -> 부채 
+              WHEN PROD_GRP_TPCD IN ('6','7') THEN ( CASE WHEN A.FAIR_BS_AMT < 0 TEHN '2' ELSE '1' END )  --20250311 장내외파생상품 FV < 0 -> 부채  
               ELSE DECODE(SUBSTR(IR_CLSF_CD,1,1),'A','1','L','2','1') 
               END 
 
