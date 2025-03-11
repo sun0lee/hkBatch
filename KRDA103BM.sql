@@ -4,6 +4,7 @@
        # 방안 : 1. KICS PROD_TPCD 로 구분하여 처리 
        # 수정대상 : FRM_TPCD  1: 경감100%인정 / 2: 갱신계획 문서화 (경감인정비율 = 잔존만기비율) / 3.갱신계획 비문서화 (경감인정비율 = 잔존만기비율 + (1-잔존만기비율)* 80%) / NULL : 미인정 코드 부재 ====> (영향) FX_RPT_TPCD 외환보고서 유형코드 
                    FRM_ADJ_RTO (위험경감인정비율) = 0 (현재 경감유형 구분 없이 항상 계산하고 있음)
+- 2025-02-18 : 외환 익스포져 요건 수정 (상대LEG 공정가치 미반영): NVL(A.FX_CNPT_EXPO_AMT, 0) * DECODE(A.FRM_TPCD, '1', 0, 0)
 */
 
 WITH /* SQL-ID : KRDA103BM */ 
@@ -174,18 +175,18 @@ T_SHOCK AS
         , A.CRNY_OPT_YN                                                                    AS CRNY_OPT_YN
         , A.FRM_TPCD                                                                         AS FRM_TPCD                        /*  위험경감유형코드       */ -- 1 위험경감 100인정 2 갱신계획문서화 3 갱신계획비문서화
         , A.FRM_ADJ_RTO                                                                    AS FRM_ADJ_RTO
-        , A.FX_EXPO_AMT + NVL(A.FX_CNPT_EXPO_AMT, 0) * DECODE(A.FRM_TPCD, '1', 1, 1)           AS EXPO_AMT         -- DECODE(A.FRM_TPCD, '1', [0,1], [0,1] -> 상대LEG 공정가치 반영여부에 따라 수정가능
+        , A.FX_EXPO_AMT + NVL(A.FX_CNPT_EXPO_AMT, 0) * DECODE(A.FRM_TPCD, '1', 0, 0)          AS EXPO_AMT         -- 2025-02-18 : 상대LEG 공정가치 미반영하도록 익스포저 수정
         , B.RISK_COEF                                                                          AS RISK_COEF
         , CASE WHEN A.FRM_TPCD IN ('1', '2', '3')
                THEN A.FX_EXPO_AMT * (1 - A.FRM_ADJ_RTO) + A.FX_EXPO_AMT * (1 + B.RISK_COEF) * A.FRM_ADJ_RTO        -- -> EQUIVALENT TO [A.FX_EXPO_AMT + A.FX_EXPO_AMT * B.RISK_COEF * A.FRM_ADJ_RTO]
                ELSE A.FX_EXPO_AMT * (1 + B.RISK_COEF)
                END
-          + NVL(A.FX_CNPT_EXPO_AMT, 0) * DECODE(A.FRM_TPCD, '1', 1, 1)                         AS FXRT_UP_FAIR_AMT
+         + NVL(A.FX_CNPT_EXPO_AMT, 0) * DECODE(A.FRM_TPCD, '1', 0, 0)                         AS FXRT_UP_FAIR_AMT -- 2025-02-18 : 상대LEG 공정가치 미반영하도록 익스포저 수정
         , CASE WHEN A.FRM_TPCD IN ('1', '2', '3')
                THEN A.FX_EXPO_AMT * (1 - A.FRM_ADJ_RTO) + A.FX_EXPO_AMT * (1 - B.RISK_COEF) * A.FRM_ADJ_RTO
                ELSE A.FX_EXPO_AMT * (1 - B.RISK_COEF)
                END
-          + NVL(A.FX_CNPT_EXPO_AMT, 0) * DECODE(A.FRM_TPCD, '1', 1, 1)                         AS FXRT_DWN_FAIR_AMT
+          + NVL(A.FX_CNPT_EXPO_AMT, 0) * DECODE(A.FRM_TPCD, '1', 0, 0)                         AS FXRT_DWN_FAIR_AMT-- 2025-02-18 : 상대LEG 공정가치 미반영하도록 익스포저 수정
         , CASE WHEN A.FRM_TPCD IN ('2')                                                                            -- 잔존만기 1년 미만의 갱신계획 문서화 대상 중
 --               THEN CASE WHEN MONTHS_BETWEEN(TO_DATE(A.MATR_DATE, 'YYYYMMDD'), TO_DATE(A.ISSU_DATE,'YYYYMMDD')) >= 12.00
                THEN CASE WHEN CONT_MATR >=1.0 --상동 
