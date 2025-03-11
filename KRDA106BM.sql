@@ -14,6 +14,11 @@
      - 731 : FX스왑 
      - 733 : 통화스왑 CRS (위험경감불인정) => 신규추가 
      - 734 : FX스왑 (위험경감불인정 => 신규추가)
+
+2025-02-03 : 기업대출 공정가치 외부 입수대상 처리 
+       - 수기입력 : IKRUSH_LT_TOTAL (LT_SEQ =0) -> Q_IC_ASSET_SECR (입수경로 변경) => 외부 공정가치에 따라 내재스프레드 산출 
+       - Q_IC_ASSET_LOAN 자동생성대상 제외 
+
 */
 WITH /* SQL-ID : KRDA106BM */ 
 ACCO_EXCPTN AS (
@@ -115,6 +120,13 @@ ACCO_EXCPTN AS (
         FROM Q_IC_ASSET_LOAN
         WHERE 1=1
         AND BASE_DATE = '$$STD_Y4MD'
+        /*2025-02-03 기업대출 공정가치 외부입수건은 대상은 자동 생성 제외 2025-02-06 ISIN_CD */
+	 AND CONT_ID NOT IN  
+              (	SELECT ISIN_CD 
+                     FROM IKRUSH_LT_TOTAL 
+                     WHERE BASE_DATE = '$$STD_Y4MD' 
+                     AND LT_SEQ = 0
+              )
 )
 --SELECT * FROM T_LOAN ;
 , T_FIDE AS 

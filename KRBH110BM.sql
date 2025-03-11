@@ -3,6 +3,8 @@
 2. 검증용 컬럼 매핑 : NOMINAL_VAL_AMT
 3. 검증용 컬럼 매핑 : 미상각 이연대출부대손익금액 NODEP_LOCF_DMST 
 4. DSCR 0인 경우 Null 처리 : DECODE(S.DSCR, 0, NULL, S.DSCR) : 신용위험보고서COA 분류 
+5. 2025-01-31 : 기업대출 공정가치 외부 입수 대상은 자동입수 대상에서 제외 
+    (IKRUSH_LT_TOTAL (LT_SEQ =0 ) 으로 입수되는 대상은 자동입수 대상에서 제외처리Q_IC_ASSET_LOAN에는 생성 / Q_CB_INST_BOND_LOAN에는 생성제외 )
 */
 
 WITH  /* SQL-ID :  KRBH110BM */ 
@@ -84,7 +86,8 @@ ACCO_MST AS
 (
     SELECT  /* KRBH110BM */
        A.GRDAT AS BASE_DATE	        	     			/* 기준일자                 */
-     , 'LOAN_O2'||A.POSITION_ID AS EXPO_ID	          	/* 익스포저ID               */
+      , 'LOAN_O2'||A.POSITION_ID AS EXPO_ID	          	/* 익스포저ID               */
+    -- , 'LOAN_O2'||A.SECURITY_ID AS EXPO_ID	          	/* 익스포저ID               */
      , A.PORTFOLIO AS FUND_CD	          		   	/* 펀드코드                 */ 
      , A.LOAN_SUBJ_DVSN AS PROD_TPCD	        	/* 상품유형코드             */
      , KICS.CD_NM AS PROD_TPNM	        		   	/* 상품유형명               */ -- 우선 NULL 처리
@@ -244,7 +247,7 @@ ACCO_MST AS
         , ACCO_MST 
         , ( SELECT * FROM IKRUSH_CODE_MAP
             WHERE GRP_CD = 'KICS_PROD_MAP_SAP'
-	  )  KICS	  
+	        )  KICS	  
   WHERE 1=1 
     AND A.POSITION_ID = S.PROD_KEY(+)
     AND S.BASE_DATE(+) = '$$STD_Y4MD'
@@ -257,3 +260,9 @@ ACCO_MST AS
  SELECT * 
  FROM T_CCC
  WHERE 1=1
+--  AND CONT_ID NOT IN 
+--       (SELECT PRNT_ISIN_CD 
+--        FROM IKRUSH_LT_TOTAL 
+--        WHERE BASE_DATE = :BASE_DATE 
+--        AND LT_SEQ = 0
+--        )

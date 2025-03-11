@@ -2,7 +2,8 @@ SELECT /* SQL-ID : KRBH108BM */
        BASE_DATE
      , LPAD(NVL(FUND_CD, 0), 4, '0')                        AS FUND_CD
      , ISIN_CD                                              AS PRNT_ISIN_CD
-     , '999999999999'                                       AS ISIN_CD          -- 특수금융의 경우 상세내역의 ISIN_CD는 미해당(편입자산이 표준코드가 없음)
+     , CASE WHEN LT_SEQ = 0 THEN SUBSTR(ISIN_CD,1,13) ELSE '99999999999' END AS ISIN_CD 
+    -- , '999999999999'                                       AS ISIN_CD          -- 특수금융의 경우 상세내역의 ISIN_CD는 미해당(편입자산이 표준코드가 없음)
      , LT_SEQ
      , ISIN_NM                                              AS PRNT_ISIN_NM
      , NULL                                                 AS ISIN_NM          -- 특수금융의 경우 ISIN_NM은 미해당

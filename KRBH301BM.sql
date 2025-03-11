@@ -1,13 +1,16 @@
-/* 수정사항
-- 조기상환 키 :  ASIS 8자리 계정과목코드 -> 아래와 같이 SEG 특성에 따라 부여함.
+/* 수정사항 
+- 조기상환 키 :  ASIS 8자리 계정과목코드 -> 아래와 같이 SEG 특성에 따라 부여함. 
     [LN_CONT_GB, COLL_KND]
     DECODE (A.LOAN_CONT_TPCD,  '10', 'PP_INDI', 'PP_CORP') ||
             DECODE (A.COLL_TPCD, '30', '_PROP'
                       , '40', '_CRDT'
                       , '50', '_GUNT'
                                           )   				 AS PREPAY_KEY
-- 2024.04.15 후순위채권 : 자기신용위험스프레드 (IKRUSH_CR_SPREAD)
+- 2024.04.15 후순위채권 : 자기신용위험스프레드 (IKRUSH_CR_SPREAD)                 
 - 개인대출 : 잔여스프레드 (금감원제공; IKRUSH_SPREAD_RESIDUAL)
+
+- 2024.10.29 : 금감원 제공 : 신용위험스프레드 GoF 수정 (경계값 중복 오류수정)
+- 2025-02-03 : 기업대출 공정가치 외부입수건은 대상은 자동 생성 제외 ( IKRUSH_LT_TOTAL / LT_SEQ = 0)
 */
 SELECT /* SQL_ID : KRBH301BM */
        TO_DATE(A.BASE_DATE, 'YYYYMMDD')                 AS AS_OF_DATE            /*  기준일자              */
@@ -23,21 +26,21 @@ SELECT /* SQL_ID : KRBH301BM */
      , '999'                                            AS FUND_TYP_CD           /*  펀드구분코드          */      -- 특별계정 관련 수정필요
      , A.DEPT_CD                                        AS ORG_UNIT              /*  조직코드              */
      , NULL                                             AS CHN_CD                /*  채널코드              */
-
-
-/* COA별 할인율 구분적용 : Q_CB_DSCNT_COA  24.04.12
+     
+     
+/* COA별 할인율 구분적용 : Q_CB_DSCNT_COA  24.04.12 
   - 개인대출 A.INST_TPCD = '1' : 무위험 (99999) + Residual spread 금감원 제시 ; IKRUSH_SPREAD_RESIDUAL
   - 기업대출 A.INST_TPCD = '2' : 무위험 + 위험스프레드 (RM_COA_ID)=>  할인율 커브에 위험스프레드 (국고채와 회사채 수익률간 차이)를 직접 반영함.   Q_CB_DSCNT_COA
   - 금융부채 SUBSTR(A.ACCO_CD,3,1)= '2' AND A.PROD_TPCD IN ('901', '903') :  무위험 (99999) + 잔여스프레드 (= 위험스프레드 - 신용위험스프레드 (금감원 제시 ; IKRUSH_CR_SPREAD_TOBE) )
 */
-     , CASE WHEN  SUBSTR(A.ACCO_CD,3,1)= '2' AND A.PROD_TPCD IN ('901', '903')
-                THEN '99999' -- 후순위 채권 :  할인율 : 무위험 할인율 + 잔여스프레드
-                WHEN A.INST_TPCD = '2' -- 기업대출의 경우 위험스프레드를 반영한 할인율
+     , CASE WHEN  SUBSTR(A.ACCO_CD,3,1)= '2' AND A.PROD_TPCD IN ('901', '903') 
+                THEN '99999' -- 후순위 채권 :  할인율 : 무위험 할인율 + 잔여스프레드 
+                WHEN A.INST_TPCD = '2' -- 기업대출의 경우 위험스프레드를 반영한 할인율 
                 THEN CASE WHEN A.COLL_TPCD IN ('30')  THEN 'PB_'||NVL(A.CRGR_VLT, 'A0')            -- 담보대출은 K-ICS요건에 따라 NULL인 경우 A0 적용(4.0기준서 p.16)
                                   WHEN C.CRGR_VLT IS NOT NULL THEN 'PB_'||NVL(C.CRGR_VLT, 'BBB0')    -- AND C.CRGR_NUM_ORG > C.CRGR_NUM_ADJ
                         ELSE 'PB_'||NVL(A.CRGR_VLT, 'BBB0') END                                                        -- 그외대출은 K-ICS요건에 따라 NULL인 경우 BBB0 적용(4.0기준서 p.16)
               ELSE '99999' END                            AS RM_COA_ID             /*  RM_COA_ID             */
-
+            
      , A.ACCO_CD                                        AS IFRS_COA_ID           /*  IFRS_COA_ID           */
      , A.INST_DTLS_TPCD                                 AS BOND_TYP              /*  채권유형코드          */
      , CASE WHEN A.COLL_TPCD IN ('20','30','80') THEN '1'
@@ -74,7 +77,7 @@ SELECT /* SQL_ID : KRBH301BM */
      , 'KRW'                                            AS CUR_CD                /*  통화코드              */
      , 'QCM_DEF'                                        AS FX_SEG                /*  환율 세그             */
 -- 20230601
--- 김재우수정
+-- 김재우수정 
 -- 기업대출 변동금리 처리
 --     , CASE WHEN A.INST_TPCD = '1' THEN A.IRATE_TPCD
 --            ELSE '1' END                                AS IR_TYP_CD             /*  금리유형코드          */      -- 기업대출 고정금리 처리
@@ -92,26 +95,26 @@ SELECT /* SQL_ID : KRBH301BM */
      , NULL                                             AS PRMTM                 /*  만기상환율            */
      , 1                                                AS SPREAD_TYP_CD         /*  스프레드 방법코드     */
      , A.ADD_SPRD                                       AS ACCRUAL_SPREAD        /*  부리SPREAD            */
-
+     
      , NULL                                             AS CREDIT_SPREAD         /*  CREDIT SPREAD    (기업대출 : 위험스프레드를 할인율에 TERM STURCTURE 형태로 반영함 => RM_COA_ID별 적용 )     */
 
-/* (잔여스프레드)  24.04.12
+/* (잔여스프레드)  24.04.12 
   - 개인대출 A.INST_TPCD = '1' : 금감원 제시 ; IKRUSH_SPREAD_RESIDUAL
   - 기업대출 A.INST_TPCD = '2' : 위험스프레드 적용하며, 할인율 커브에 위험스프레드 (국고채와 회사채 수익률간 차이)를 직접 반영함.  => RM_COA_ID 별로 구분하여 적용 ; Q_CB_DSCNT_COA
-  - 금융부채 SUBSTR(A.ACCO_CD,3,1)= '2' AND A.PROD_TPCD IN ('901', '903') :  잔여스프레드 = 위험스프레드 - 신용위험스프레드 (금감원 제시 ; IKRUSH_CR_SPREAD_TOBE)
+  - 금융부채 SUBSTR(A.ACCO_CD,3,1)= '2' AND A.PROD_TPCD IN ('901', '903') :  잔여스프레드 = 위험스프레드 - 신용위험스프레드 (금감원 제시 ; IKRUSH_CR_SPREAD_TOBE)  
 */
-     , CASE WHEN A.INST_TPCD = '1'  THEN NVL(D.SPREAD, 0) / 100  /*개인대출*/
+     , CASE WHEN A.INST_TPCD = '1'  THEN NVL(D.SPREAD, 0) / 100  /*개인대출*/ 
 		  WHEN SUBSTR(A.ACCO_CD,3,1)= '2' AND A.PROD_TPCD IN ('901', '903') THEN /*금융부채 */
                                         ( F.PREV_SPRD + (F.SPRD -F.PREV_SPRD) * ( A.RES_MON - F.PREV_NUM) / (F.MAT_NUM - F.PREV_NUM)) /100   -- 위험스프레드 (회사채수익률 - 국고채수익률)
 				-	( E.PREV_SPRD + (E.SPRD -E.PREV_SPRD) * ( A.RES_MON - E.PREV_NUM) / (E.MAT_NUM - E.PREV_NUM)) /100       -- 신용위험스프레드 (감독원장 제공)
-                  ELSE NULL
+                  ELSE NULL   
              END                                        AS RESIDUAL_SPREAD       /*  RESIDUAL SPREAD       */
         /* CHECK
                                 ,   A.CRGR_VLT
                                 ,        ( F.PREV_SPRD + (F.SPRD -F.PREV_SPRD) * ( A.RES_MON - F.PREV_NUM) / (F.MAT_NUM - F.PREV_NUM)) /100   AS RISK_SP-- 위험스프레드 (회사채수익률 - 국고채수익률)
 				,	( E.PREV_SPRD + (E.SPRD -E.PREV_SPRD) * ( A.RES_MON - E.PREV_NUM) / (E.MAT_NUM - E.PREV_NUM))        AS CR_SP-- 신용위험스프레드 (감독원장 제공)
 */
-
+        
      , NULL                                             AS MARGIN_SPREAD         /*  MARGIN SPREAD         */
      , NULL                                             AS DELAY_RATE            /*  연체이율              */
      , NULL                                             AS LAPS_RATE             /*  중도해지이율          */
@@ -228,32 +231,39 @@ SELECT /* SQL_ID : KRBH301BM */
 --		, E.SPRD
 --		, E.PREV_NUM
 --		, E.MAT_NUM
-  FROM (
-              SELECT AA.*
-              , TO_NUMBER(GREATEST (
+  FROM ( 
+              SELECT AA.* 
+              , TO_NUMBER(GREATEST ( 
                            LEAST(
                                   CEIL((TO_DATE(AA.MATR_DATE,'YYYYMMDD') - TO_DATE('$$STD_Y4MD','YYYYMMDD')) /365)
                                   , 31
                                 )
                           , 1
-                         ))            AS RMN_MATR_CLCD
+                         ))            AS RMN_MATR_CLCD  
                , CASE WHEN LAST_MODIFIED_BY='KRBH101BM' THEN  /*융자데이터 입수의 경우에만 대출세부속성에 따라 조기상환 KEY 매핑 */
                  DECODE (LOAN_CONT_TPCD,  '10', 'PP_INDI', 'PP_CORP') ||
 				 DECODE (COLL_TPCD, '30', '_PROP'
 								  , '40', '_CRDT'
 								  , '50', '_GUNT'
 --                                      , 'ETC'
-                                      )
+                                      ) 
                   ELSE NULL  END 				 AS PREPAY_KEY
-		, CEIL(MONTHS_BETWEEN ( TO_DATE(MATR_DATE, 'YYYYMMDD'), TO_DATE(BASE_DATE, 'YYYYMMDD') )) AS RES_MON
-
+		, CEIL(MONTHS_BETWEEN ( TO_DATE(MATR_DATE, 'YYYYMMDD'), TO_DATE(BASE_DATE, 'YYYYMMDD') )) AS RES_MON		
+		
            FROM Q_IC_ASSET_LOAN AA
-          WHERE 1=1
+          WHERE 1=1 
             AND AA.BASE_DATE = '$$STD_Y4MD'
+	/*2025-02-03 기업대출 공정가치 외부입수건은 대상은 자동 생성 제외 2024-02-06 ISIN_CD */
+	    AND CONT_ID NOT IN  
+              (	SELECT ISIN_CD 
+              FROM IKRUSH_LT_TOTAL 
+              WHERE BASE_DATE = '$$STD_Y4MD' 
+              AND LT_SEQ = 0
+              )
        )  A
-     , ( SELECT *
+     , ( SELECT * 
             FROM Q_CB_PREPAY_CONST
-           WHERE APPLY_START_DATE = (
+           WHERE APPLY_START_DATE = (                                
                                       SELECT MAX(APPLY_START_DATE)
                                         FROM Q_CB_PREPAY_CONST
                                        WHERE APPLY_START_DATE <= TO_DATE('$$STD_Y4MD', 'YYYYMMDD')
@@ -306,22 +316,22 @@ SELECT /* SQL_ID : KRBH301BM */
      , (
           SELECT SPREAD
             FROM IKRUSH_SPREAD_RESIDUAL
-           WHERE BASE_YM = (
+           WHERE BASE_YM = (                                
                               SELECT MAX(BASE_YM)
                                 FROM IKRUSH_SPREAD_RESIDUAL
                                WHERE BASE_YM <= SUBSTR('$$STD_Y4MD', 1, 6)
                            )
-       ) D
+       ) D                             
 --     , (
 --     	  SELECT 'LOAN_O_G110KR6095082AB20142020113000001' AS EXPO_ID, 0.01 AS SPREAD FROM DUAL UNION ALL
 --     	  SELECT 'LOAN_O_G110KR6095081AB40142020111600003' AS EXPO_ID, 0.01 AS SPREAD FROM DUAL UNION ALL
 --     	  SELECT 'LOAN_O_G110KR6095081AB40142020111600002' AS EXPO_ID, 0.01 AS SPREAD FROM DUAL UNION ALL
 --     	  SELECT 'LOAN_O_G110KR6095081AB40142020111600001' AS EXPO_ID, 0.01 AS SPREAD FROM DUAL UNION ALL
 --     	  SELECT 'LOAN_O_G110KRK1113100010142013101000001' AS EXPO_ID, 0.00 AS SPREAD FROM DUAL UNION ALL
---     	  SELECT 'LOAN_O_G110KR60950817350142017033100002' AS EXPO_ID, 0.00 AS SPREAD FROM DUAL
---     	 ) E  -- 금융부채 자기신용위험스프레드
+--     	  SELECT 'LOAN_O_G110KR60950817350142017033100002' AS EXPO_ID, 0.00 AS SPREAD FROM DUAL 
+--     	 ) E  -- 금융부채 자기신용위험스프레드   						
 --     	 , (
---           SELECT *
+--           SELECT * 
 --             FROM IKRUSH_CR_SPREAD
 --            WHERE BASE_DATE = '$$STD_Y4MD'
 --     	 ) E
@@ -347,27 +357,27 @@ SELECT /* SQL_ID : KRBH301BM */
                             ) AA
                     )	A
             ) E
-	, ( /* 위험스프레드 */
-      SELECT A.*
-        , '9' AS PROD_DV
+	, ( /* 위험스프레드 */	
+                SELECT A.*
+                  , '9' AS PROD_DV
 			, CASE WHEN PREV_NUM IS NULL  THEN SPRD / 3
-					ELSE DIFF_SPRD / DIFF_MON
+					ELSE DIFF_SPRD / DIFF_MON 
 					END AS FACTOR
 		FROM (
 			SELECT  AA.*
-        , REPLACE(REPLACE(REPLACE(CRD_GRD,'+',''),'-',''),'0','') AS CRD_GRD_MAP
-        , LAG(MAT_NUM,1,0) OVER (PARTITION BY CRD_GRD ORDER BY MAT_NUM) +1                 AS PREV_NUM -- 2024.10.29 GoF 수정 (경계값 중복 오류수정)
-        , LAG(SPRD,1,0) OVER (PARTITION BY CRD_GRD ORDER BY MAT_NUM)                    AS PREV_SPRD -- 2024.10.29 GoF 수정
-        , MAT_NUM - LAG(MAT_NUM,1,0) OVER (PARTITION BY CRD_GRD ORDER BY MAT_NUM)   AS DIFF_MON -- 2024.10.29 GoF 수정
-        , SPRD - LAG(SPRD,1,0) OVER (PARTITION BY CRD_GRD ORDER BY MAT_NUM)             AS DIFF_SPRD -- 2024.10.29 GoF 수정 
+                         , REPLACE(REPLACE(REPLACE(CRD_GRD,'+',''),'-',''),'0','') AS CRD_GRD_MAP
+				, LAG(MAT_NUM) OVER (PARTITION BY CRD_GRD ORDER BY MAT_NUM)  				AS PREV_NUM
+				, LAG(SPRD) OVER (PARTITION BY CRD_GRD ORDER BY MAT_NUM)  					AS PREV_SPRD
+				, MAT_NUM - LAG(MAT_NUM) OVER (PARTITION BY CRD_GRD ORDER BY MAT_NUM) 	AS DIFF_MON
+				, SPRD - LAG(SPRD) OVER (PARTITION BY CRD_GRD ORDER BY MAT_NUM)  			AS DIFF_SPRD
 			FROM (
-
+						
 					SELECT  CRD_GRD
 						, MAT_CD
 						, TO_NUMBER(SUBSTR(MAT_CD,2,3)) AS MAT_NUM
 						, SPRD
 					FROM (
-						SELECT A.*
+						SELECT A.* 
 						FROM IKRUSH_SPREAD_BD A
 						WHERE 1=1
 						AND BASE_YM = SUBSTR('$$STD_Y4MD', 1,6)
@@ -380,8 +390,10 @@ SELECT /* SQL_ID : KRBH301BM */
  WHERE 1=1
    AND A.PREPAY_KEY = B.PREPAY_KEY(+)
    AND A.EXPO_ID = C.EXPO_ID(+)
-   AND SUBSTR(A.PROD_TPCD,1,1) = E.PROD_DV (+)
+   AND SUBSTR(A.PROD_TPCD,1,1) = E.PROD_DV (+) 
    AND SUBSTR(A.PROD_TPCD,1,1) = F.PROD_DV (+)
    AND A.CRGR_VLT = F.CRD_GRD(+)
-   AND A.RES_MON BETWEEN F.PREV_NUM(+)  AND F.MAT_NUM(+)
+   AND A.RES_MON BETWEEN F.PREV_NUM(+)  AND F.MAT_NUM(+) 
    AND A.RES_MON BETWEEN E.PREV_NUM(+)  AND E.MAT_NUM(+)
+   
+   ;

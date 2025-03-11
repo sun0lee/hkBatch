@@ -1,7 +1,12 @@
-/* 수정사항 
-IBD_ZTCFMPEBAPST : GL_ACCOUNT 8자리 -> 10자리 변경되는 경우 확인 20240430 
+/* 수정사항
+1. IBD_ZTCFMPEBAPST : GL_ACCOUNT 8자리 -> 10자리 변경되는 경우 확인 20240430 
+2. 기업대출 공정가치 외부 입수 대상 : 2025-01-31 추가 
+      EXPO_ID : 'LOAN_O2'||A.PRNT_ISIN_CD (IKRUSH_LT_GRP1 에 LT_SEQ =0 조건으로 적재한 대상)
+      ACCO_CD : A.FUND_CD,'G000','1','2')||'_'||A.ACCO_CD
+      ACCO_NM : (SELECT ACCO_NM FROM ACCO_MST WHERE  ACCO_CD  =A.ACCO_CD) 
 */
 
+--INSERT INTO Q_IC_ASSET_SECR 
 WITH ACCO_MST AS 
  ( /*계정코드 마스터 (신규추가) */
         SELECT ACCO_CD, ACCO_NM
@@ -16,17 +21,24 @@ WITH ACCO_MST AS
  )
  , T AS (
 SELECT /* SQL-ID : KRBH107BM */ A.BASE_DATE                  AS BASE_DATE                /*  기준일자           */
-     , 'LOAN_L_'||A.FUND_CD||A.PRNT_ISIN_CD||'_'||A.ISIN_CD||'_'||LPAD(A.LT_SEQ, 3, '0')
+   --   , 'LOAN_L_'||A.FUND_CD||A.PRNT_ISIN_CD||'_'||A.ISIN_CD||'_'||LPAD(A.LT_SEQ, 3, '0')
+     , CASE WHEN LT_SEQ =0 THEN 'LOAN_O2'||A.PRNT_ISIN_CD
+                           ELSE 'LOAN_L_'||A.FUND_CD||A.PRNT_ISIN_CD||'_'||A.ISIN_CD||'_'||LPAD(A.LT_SEQ, 3, '0')
+                           END 
                                     AS EXPO_ID                  /*  익스포저ID         */
      , A.FUND_CD                    AS FUND_CD                  /*  펀드코드           */
      , A.LT_TPCD                    AS LT_TPCD                  /*  상품유형코드       */
      , A.LT_TPNM                    AS LT_TPNM                  /*  상품유형명         */
      , A.LT_DTLS_TPCD               AS KICS_PROD_TPCD           /*  KICS상품유형코드    */
      , A.LT_DTLS_TPNM               AS KICS_PROD_TPNM           /*  KICS상품유형명     */
-     , A.PRNT_ISIN_CD               AS ISIN_CD                  /*  종목코드           */
+--     , A.PRNT_ISIN_CD               AS ISIN_CD                  /*  종목코드           */
+     , CASE WHEN A.LT_SEQ = 0 THEN A.ISIN_CD  ELSE A.PRNT_ISIN_CD  AS ISIN_CD /*  종목코드 2025-02-06 수정          */
      , A.PRNT_ISIN_NM               AS ISIN_NM                  /*  종목명             */
-     , B.ACCO_CD                    AS ACCO_CD                  /*  계정과목코드   펀드구분 ||계정코드    */
-     , B.ACCO_NM                    AS ACCO_NM                  /*  계정과목명         */
+   --   , B.ACCO_CD                    AS ACCO_CD                  /*  계정과목코드   펀드구분 ||계정코드    */
+   --   , B.ACCO_NM                    AS ACCO_NM                  /*  계정과목명         */
+     , NVL(B.ACCO_CD,  DECODE(A.FUND_CD,'G000','1','2')||'_'||A.ACCO_CD)                    AS ACCO_CD                  /*  계정과목코드   펀드구분 ||계정코드    */
+     , NVL(B.ACCO_NM, (SELECT   ACCO_NM FROM ACCO_MST WHERE  ACCO_CD  =A.ACCO_CD))          AS ACCO_NM                  /*  계정과목명         */
+
      , NULL                         AS CONT_ID                  /*  계약ID             */
      , 'B'                          AS INST_TPCD                /* 인스트루먼트유형코드  */
      , '4'                          AS INST_DTLS_TPCD           /* 인스트루먼트유형상세유형코드 */
@@ -148,7 +160,8 @@ SELECT /* SQL-ID : KRBH107BM */ A.BASE_DATE                  AS BASE_DATE       
 --   AND A.FUND_CD = B.FUND_CD(+)
    AND DECODE(SUBSTR(A.FUND_CD,1,1),'G','G000',A.FUND_CD)= B.FUND_CD(+)
 --   AND A.FUND_CD = C.FUND_CD(+)
-   AND A.PRNT_ISIN_CD = B.ISIN_CD(+)
+   --AND A.PRNT_ISIN_CD = B.ISIN_CD(+)
+   and  (CASE WHEN A.LT_SEQ = 0 THEN A.ISIN_CD ELSE A.PRNT_ISIN_CD END) = B.ISIN_CD (+) -- 2025-02-06 수정
 --    AND NVL(A.CRNY_CD, 'KRW') = FX.CRNC_CD(+)
    )
  SELECT * 
