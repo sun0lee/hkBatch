@@ -251,7 +251,7 @@ ACCO_EXCPTN AS (
 -- 금리리스크 COA 수정 
 /* 자산(1) 부채(2) */
         ,CASE WHEN A.LT_TP = 'Y' AND PROD_GRP_TPCD IN ('6','7') AND A.FAIR_BS_AMT < 0 THEN '2' -- 간접보유자산 : 장내장외파생상품 FV<0 -> 부채 
-              WHEN PROD_GRP_TPCD IN ('6','7') THEN ( CASE WHEN A.FAIR_BS_AMT < 0 TEHN '2' ELSE '1' END )  --20250311 장내외파생상품 FV < 0 -> 부채  
+              WHEN PROD_GRP_TPCD IN ('6','7') THEN ( CASE WHEN A.FAIR_BS_AMT < 0 THEN '2' ELSE '1' END )  --20250311 장내외파생상품 FV < 0 -> 부채  
               ELSE DECODE(SUBSTR(IR_CLSF_CD,1,1),'A','1','L','2','1') 
               END 
 

@@ -13,7 +13,7 @@ MARKET LEDGER를 집계하는 기본적인 원칙은 EXPO ID의 포지션 단위
 */
 WITH T_EXPO AS 
 (
-    SELECT *
+    SELECT A.*, C.PROD_GRP_TPCD
     FROM Q_IC_EXPO A
     , (
         SELECT KICS_PROD_TPCD, PROD_GRP_TPCD
